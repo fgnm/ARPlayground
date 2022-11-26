@@ -22,15 +22,14 @@ import com.badlogic.gdx.utils.Pools;
 import net.mgsx.gltf.loaders.glb.GLBLoader;
 import net.mgsx.gltf.scene3d.attributes.PBRCubemapAttribute;
 import net.mgsx.gltf.scene3d.attributes.PBRTextureAttribute;
-import net.mgsx.gltf.scene3d.lights.DirectionalShadowLight;
 import net.mgsx.gltf.scene3d.scene.Scene;
 import net.mgsx.gltf.scene3d.scene.SceneAsset;
-import net.mgsx.gltf.scene3d.scene.SceneManager;
 import net.mgsx.gltf.scene3d.shaders.PBRDepthShaderProvider;
 import net.mgsx.gltf.scene3d.shaders.PBRShaderConfig;
 import net.mgsx.gltf.scene3d.shaders.PBRShaderProvider;
 import net.mgsx.gltf.scene3d.utils.EnvironmentUtil;
 import net.mgsx.gltf.scene3d.utils.IBLBuilder;
+import net.mgsx.gltf.scene3d.utils.ShaderParser;
 
 import games.rednblack.gdxar.GdxAnchor;
 import games.rednblack.gdxar.GdxArApplicationListener;
@@ -41,8 +40,8 @@ import games.rednblack.gdxar.GdxPose;
 
 /** {@link com.badlogic.gdx.ApplicationListener} implementation shared by all platforms. */
 public class ARPlayground extends GdxArApplicationListener {
-	private SceneManager sceneManager;
-	private DirectionalShadowLight directionalLight;
+	private CustomSceneManager sceneManager;
+	private CustomDirectionalShadowLight directionalLight;
 	private Scene modelScene, groundFloor;
 	private SceneAsset modelAsset;
 
@@ -65,11 +64,13 @@ public class ARPlayground extends GdxArApplicationListener {
 		PBRShaderConfig config = PBRShaderProvider.createDefaultConfig();
 		config.numBones = 40;
 		config.manualSRGB = PBRShaderConfig.SRGB.NONE;
+		config.fragmentShader = ShaderParser.parse(Gdx.files.internal("pbr/pbr.fs.glsl"));;
+		config.vertexShader = ShaderParser.parse(Gdx.files.internal("pbr/pbr.vs.glsl"));
 		DepthShader.Config depthConfig = PBRShaderProvider.createDefaultDepthConfig();
 		depthConfig.numBones = 40;
 
-		sceneManager = new SceneManager(new PBRShadowCatcherShaderProvider(config), new PBRDepthShaderProvider(depthConfig));
-		directionalLight = new DirectionalShadowLight(2048, 2048);
+		sceneManager = new CustomSceneManager(new PBRShadowCatcherShaderProvider(config), new PBRDepthShaderProvider(depthConfig));
+		directionalLight = new CustomDirectionalShadowLight(2048, 2048);
 		directionalLight.direction.set(1, -3, 1).nor();
 		directionalLight.color.set(Color.WHITE);
 		sceneManager.environment.add(directionalLight);
@@ -89,6 +90,8 @@ public class ARPlayground extends GdxArApplicationListener {
 		sceneManager.environment.set(new PBRTextureAttribute(PBRTextureAttribute.BRDFLUTTexture, brdfLUT));
 		sceneManager.environment.set(PBRCubemapAttribute.createSpecularEnv(specularCubemap));
 		sceneManager.environment.set(PBRCubemapAttribute.createDiffuseEnv(diffuseCubemap));
+		if (getArAPI().getLightEstimationMode() == GdxLightEstimationMode.ENVIRONMENTAL_HDR)
+			sceneManager.environment.set(new SphericalHarmonicsAttribute(SphericalHarmonicsAttribute.Coefficients));
 
 		//Create a plane model for the virtual ground floor, need to show shadows
 		builder.begin();
@@ -115,21 +118,18 @@ public class ARPlayground extends GdxArApplicationListener {
 	public void renderARModels(GdxFrame frame) {
 		//Update environment light based on AR frame
 		if (frame.lightEstimationMode == GdxLightEstimationMode.ENVIRONMENTAL_HDR) {
-			//TODO Set ambient light with spherical harmonics
-			//sceneManager.setAmbientLight(frame.sphericalHarmonics);
-			sceneManager.setAmbientLight(frame.ambientIntensity);
+			sceneManager.setAmbientLight(frame.sphericalHarmonics);
 
 			directionalLight.direction.set(frame.lightDirection.x, frame.lightDirection.y, -frame.lightDirection.z);
-			directionalLight.intensity = frame.lightIntensity;
-			directionalLight.color.set(frame.lightColor);
+			directionalLight.lightIntensity.set(frame.lightIntensity);
 		} else if (frame.lightEstimationMode == GdxLightEstimationMode.AMBIENT_INTENSITY) {
 			sceneManager.setAmbientLight(frame.ambientIntensity);
 
 			directionalLight.intensity = 1f;
-			directionalLight.color.set(frame.lightColor);
+			directionalLight.baseColor.set(frame.lightColor);
 		} else {
 			sceneManager.setAmbientLight(1);
-			directionalLight.color.set(Color.WHITE);
+			directionalLight.baseColor.set(Color.WHITE);
 		}
 
 		//Force update models based on the tracking anchor calculated by the framework
@@ -160,8 +160,6 @@ public class ARPlayground extends GdxArApplicationListener {
 	}
 
 	public void handleTouch(float x, float y) {
-		System.out.println(x);
-		System.out.println(y);
 		if (modelScene == null) {
 			GdxAnchor newAnchor = getArAPI().requestHitPlaneAnchor(x, y, GdxPlaneType.ANY);
 			if (newAnchor != null) {

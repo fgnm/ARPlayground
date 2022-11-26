@@ -5,6 +5,7 @@ import com.badlogic.gdx.graphics.g3d.Renderable;
 import com.badlogic.gdx.graphics.g3d.Shader;
 import com.badlogic.gdx.graphics.g3d.utils.DefaultShaderProvider;
 
+import net.mgsx.gltf.scene3d.shaders.PBRShader;
 import net.mgsx.gltf.scene3d.shaders.PBRShaderConfig;
 import net.mgsx.gltf.scene3d.shaders.PBRShaderProvider;
 
@@ -14,6 +15,14 @@ public class PBRShadowCatcherShaderProvider extends PBRShaderProvider {
 
     public PBRShadowCatcherShaderProvider(PBRShaderConfig config) {
         super(config);
+    }
+
+    @Override
+    protected PBRShader createShader(Renderable renderable, PBRShaderConfig config, String prefix) {
+        if(renderable.environment.has(SphericalHarmonicsAttribute.Coefficients)){
+            prefix += "#define sphericalHarmonicsFlag\n";
+        }
+        return new PBRCustomShader(renderable, config, prefix);
     }
 
     @Override
