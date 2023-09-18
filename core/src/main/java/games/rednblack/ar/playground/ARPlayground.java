@@ -21,7 +21,9 @@ import com.badlogic.gdx.utils.Pools;
 
 import net.mgsx.gltf.loaders.glb.GLBLoader;
 import net.mgsx.gltf.scene3d.attributes.PBRCubemapAttribute;
+import net.mgsx.gltf.scene3d.attributes.PBRFloatAttribute;
 import net.mgsx.gltf.scene3d.attributes.PBRTextureAttribute;
+import net.mgsx.gltf.scene3d.scene.CascadeShadowMap;
 import net.mgsx.gltf.scene3d.scene.Scene;
 import net.mgsx.gltf.scene3d.scene.SceneAsset;
 import net.mgsx.gltf.scene3d.shaders.PBRDepthShaderProvider;
@@ -44,6 +46,7 @@ public class ARPlayground extends GdxArApplicationListener {
 	private CustomDirectionalShadowLight directionalLight;
 	private Scene modelScene, groundFloor;
 	private SceneAsset modelAsset;
+	private CascadeShadowMap cascadeShadowMap;
 
 	private final Quaternion targetDir = new Quaternion();
 	private final Vector3 targetPos = new Vector3();
@@ -70,10 +73,13 @@ public class ARPlayground extends GdxArApplicationListener {
 		depthConfig.numBones = 40;
 
 		sceneManager = new CustomSceneManager(new PBRShadowCatcherShaderProvider(config), new PBRDepthShaderProvider(depthConfig));
-		directionalLight = new CustomDirectionalShadowLight(2048, 2048);
+		directionalLight = new CustomDirectionalShadowLight(4096, 4096);
 		directionalLight.direction.set(1, -3, 1).nor();
 		directionalLight.color.set(Color.WHITE);
 		sceneManager.environment.add(directionalLight);
+
+		cascadeShadowMap = new CascadeShadowMap(2);
+		//sceneManager.setCascadeShadowMap(cascadeShadowMap);
 
 		IBLBuilder iblBuilder = IBLBuilder.createOutdoor(directionalLight);
 		Cubemap diffuseCubemap = EnvironmentUtil.createCubemap(new InternalFileHandleResolver(),
@@ -90,6 +96,7 @@ public class ARPlayground extends GdxArApplicationListener {
 		sceneManager.environment.set(new PBRTextureAttribute(PBRTextureAttribute.BRDFLUTTexture, brdfLUT));
 		sceneManager.environment.set(PBRCubemapAttribute.createSpecularEnv(specularCubemap));
 		sceneManager.environment.set(PBRCubemapAttribute.createDiffuseEnv(diffuseCubemap));
+		sceneManager.environment.set(new PBRFloatAttribute(PBRFloatAttribute.ShadowBias, 1f / 255f));
 		if (getArAPI().getLightEstimationMode() == GdxLightEstimationMode.ENVIRONMENTAL_HDR)
 			sceneManager.environment.set(new SphericalHarmonicsAttribute(SphericalHarmonicsAttribute.Coefficients));
 
@@ -107,8 +114,15 @@ public class ARPlayground extends GdxArApplicationListener {
 		modelAsset = new GLBLoader().load(Gdx.files.internal("BrainStem.glb"));
 
 		//Setup glTF -> AR Bind
+		getArAPI().getARCamera().far = 10f;
 		sceneManager.setCamera(getArAPI().getARCamera());
 		directionalLight.setViewport(6, 6, sceneManager.camera.near, sceneManager.camera.far);
+
+		//cascadeShadowMap.setCascades(sceneManager.camera, directionalLight, 10f, 2f);
+		/*directionalLight.setViewport(4, 4, sceneManager.camera.near, sceneManager.camera.far);
+		DirectionalShadowLight shadowLight = sceneManager.getFirstDirectionalShadowLight();
+		shadowLight.setCenter(sceneManager.camera.position);
+		cascadeShadowMap.setCascades(sceneManager.camera, shadowLight, 1000f, 4f);*/
 
 		//Start AR!
 		getArAPI().setRenderAR(true);

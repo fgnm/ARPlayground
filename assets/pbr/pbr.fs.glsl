@@ -19,7 +19,7 @@
 
 void main() {
 	vec4 baseColor = getBaseColor();
-    
+
     vec3 color = baseColor.rgb;
 
     // final frag color
@@ -39,12 +39,13 @@ void main() {
 #else
 	out_FragColor.a = 1.0;
 #endif
+	applyClippingPlane();
 }
 
 #else
 
 void main() {
-	
+
     // Metallic and Roughness material properties are packed together
     // In glTF, these factors can be specified by fixed scalar values
     // or from a metallic-roughness map
@@ -64,7 +65,7 @@ void main() {
     float alphaRoughness = perceptualRoughness * perceptualRoughness;
 
     vec4 baseColor = getBaseColor();
-    
+
 #ifdef iorFlag
     vec3 f0 = vec3(pow(( u_ior - 1.0) /  (u_ior + 1.0), 2.0));
 #else
@@ -248,14 +249,14 @@ void main() {
     color += emissive;
 #endif
 
-    
+
     // final frag color
 #ifdef GAMMA_CORRECTION
     out_FragColor = vec4(pow(color,vec3(1.0/GAMMA_CORRECTION)), baseColor.a);
 #else
     out_FragColor = vec4(color, baseColor.a);
 #endif
-    
+
 #ifdef fogFlag
 #ifdef fogEquationFlag
     float fog = (eyeDistance - u_fogEquation.x) / (u_fogEquation.y - u_fogEquation.x);
@@ -277,6 +278,8 @@ void main() {
 #else
 	out_FragColor.a = 1.0;
 #endif
+
+	applyClippingPlane();
 
 }
 
